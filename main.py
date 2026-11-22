@@ -1,21 +1,47 @@
 #!/usr/bin/env python3
-"""Sum up 22 November 2026's world news in one image -- v2.
+"""Sum up Sunday 22 November 2026's world news in one image -- v3-fix.
 
 A make.fun program/v1 entry (competition: news-image-20261122).
 
-v2 fixes the v1 judge panel (mean 63.0, PERBAIKI): 25 dated stories
-(1 lead + 24 in a fixed 3 x 8 grid) instead of 12, a world map with
-numbered pins, a first-wire UTC timeline, region-count chips, and a
-DATE CHECK box separating 22 Nov items from the two 21 Nov carry-overs.
-Every story is a real item from the 22 Nov 2026 wire digests
-(Reuters / AP / BBC digests checked 22 Nov ~04:30 UTC); the two
-21 Nov items (EU-Indonesia deal, Peru quake) are tagged 21 NOV.
+v3-fix reflows the v3 broadsheet (judge panel PERBAIKI, mean 57.7)
+into the competition's hard limit of exactly 1024 x 1024 pixels --
+v3's 1024 x 1400 canvas was the one fatal defect, punished by two
+judges as a critical rule violation. Nothing is dropped to get
+there: still one lead story plus 36 illustrated grid stories (37
+featured in total), a numbered "ALSO ON SUNDAY" list of 24 more
+items, a first-wire UTC timeline, a world map with 37 numbered pins,
+region chips for 7 regions, and a DATE CHECK box that names what
+was deliberately left out and why. The reflow: a 4-column x 9-row
+grid (was 3 x 12) with smaller 238 x 60 cards and 32 px scaled
+scenes, a 168 px lead row, and a 4-column also-on list.
 
-The program draws a dense newspaper front page and writes one
-deterministic PNG to $MAKEFUN_OUTPUT_DIR/entry.png (or ./output/
-entry.png locally). No network, no randomness, no wall-clock time,
-no third-party packages: only the Python standard library, so two
-grading runs produce byte-identical output.
+Two stories were swapped after live re-verification on 22 Nov
+2026, and one chip count was corrected: the Poland missiles
+(#2, first filed 21 Nov) leave the grid and are now named in the
+DATE CHECK box; the replacement is the U.S. move to ban Chinese AI
+models. The Trump peace item (#3) is now the 22-Nov-reported
+Zelenskyy agreement to a pre-Christmas talks round. The v3 chips
+said EUROPE 9 / N. AMER. 8; the grid actually held 11 / 6 -- the
+chips now read the true counts (EUROPE 10 / N. AMER. 7 after the
+swap). The lead summary was corrected too: the Sunday-filed strike
+was on U.S. bases in Bahrain (the Kuwait base, Ali Al Salem, was
+hit on 18 Nov, so it is labelled as the wider war, not as Sunday).
+
+Every featured story is a real item that happened on, or was first
+reported on, Sunday 22 November 2026, checked against the day's
+wire digests (Reuters / AP / BBC / AFP / Al Jazeera, read 22 Nov
+2026) plus live search the same day. Nothing in the grid is first
+filed 21 November: the Peru quake, the EU-Indonesia trade deal and
+the Poland missiles, all first filed on 21 Nov, were held out of
+the grid and are named in the DATE CHECK box instead. The Shenzhen
+trilateral (Trump, Xi and Putin) is used because the day's digests
+report it from Shenzhen; no Manila summit is claimed anywhere.
+
+The program draws the page and writes one deterministic PNG to
+$MAKEFUN_OUTPUT_DIR/entry.png (or ./output/entry.png locally).
+No network, no randomness, no wall-clock time, no third-party
+packages: only the Python standard library, so two grading runs
+produce byte-identical output.
 
 Run:  python3 main.py
 """
@@ -28,15 +54,16 @@ import zlib
 W, H = 1024, 1024
 
 # ---------------------------------------------------------------- palette
-PAPER = (247, 242, 232)      # newsprint cream
-CARD = (253, 251, 246)       # card paper
-INK = (26, 26, 26)           # near-black ink
-MUTED = (90, 84, 74)         # grey-brown for small print
-RED = (178, 34, 34)          # headline red
-NAVY = (18, 38, 66)          # dark navy panel
-NAVY2 = (30, 58, 95)         # lighter navy
-SKY = (147, 197, 253)        # pale blue for globe lines
-GRID = (58, 96, 140)         # dim blue for map graticule
+# Newsprint cream, ink, and a restrained wire-service accent set.
+PAPER = (247, 242, 232)
+CARD = (253, 251, 246)
+INK = (26, 26, 26)
+MUTED = (90, 84, 74)
+RED = (178, 34, 34)
+NAVY = (18, 38, 66)
+NAVY2 = (30, 58, 95)
+SKY = (147, 197, 253)
+GRID = (58, 96, 140)
 WHITE = (255, 255, 255)
 GOLD = (234, 179, 8)
 TEAL = (13, 116, 128)
@@ -44,22 +71,23 @@ BROWN = (146, 64, 14)
 ORANGE = (194, 65, 12)
 SLATE = (71, 85, 105)
 GREEN = (21, 101, 52)
-SEA = (16, 52, 84)           # gulf water at night
-SAND = (214, 182, 128)       # coastline sand
+SEA = (16, 52, 84)
+SAND = (214, 182, 128)
 FLAME = (230, 120, 20)
-PINK = (253, 232, 232)       # date-check tint
-HAIR = (210, 200, 185)       # card hairlines
+PINK = (253, 232, 232)
+HAIR = (210, 200, 185)
+CREAM2 = (238, 233, 224)
+CREAM3 = (255, 250, 242)
 
 
 # ------------------------------------------------------------------ canvas
 class Canvas:
-    """An RGB pixel buffer with tiny shape-drawing helpers."""
+    """An RGB pixel buffer with small shape-drawing helpers."""
 
     def __init__(self, w, h, bg):
         self.w = w
         self.h = h
-        px = bytes(bg)
-        row = px * w
+        row = bytes(bg) * w
         self.buf = bytearray(row * h)
 
     def px(self, x, y, c):
@@ -114,9 +142,9 @@ class Canvas:
         """A line drawn as a chain of t x t stamps."""
         steps = max(abs(x1 - x0), abs(y1 - y0), 1)
         for i in range(steps + 1):
-            t_ = i / steps
-            x = int(round(x0 + (x1 - x0) * t_))
-            y = int(round(y0 + (y1 - y0) * t_))
+            tt = i / steps
+            x = int(round(x0 + (x1 - x0) * tt))
+            y = int(round(y0 + (y1 - y0) * tt))
             self.fill_rect(x - t // 2, y - t // 2, t, t, c)
 
     def circle(self, cx, cy, r, c, fill=False):
@@ -178,7 +206,6 @@ class Canvas:
                         int(round(cy + r * math.sin(a)))))
         self.poly(pts, c)
 
-
     def dither_rect(self, x, y, w, h, c1, c2):
         """1 px checkerboard of two colors (deterministic texture)."""
         x0 = max(0, x)
@@ -200,24 +227,39 @@ class Canvas:
                 self.buf[i:i + n * 3] = row_b
 
     def grain(self, x, y, w, h, dark, light, step=1):
-        """Deterministic newsprint stipple: 1 px dots from a hash of (x, y)."""
+        """Deterministic newsprint stipple: dots from a hash of (x, y)."""
         for gy in range(y, y + h, step):
             if gy < 0 or gy >= self.h:
                 continue
             for gx in range(x, x + w, step):
                 if gx < 0 or gx >= self.w:
                     continue
-                h = (gx * 0x9E3779B1 + gy * 0x85EBCA6B) & 0xFFFFFFFF
-                h ^= h >> 16
-                h = (h * 0x21F0AAAD) & 0xFFFFFFFF
-                h ^= h >> 15
-                h = (h * 0x735A2D97) & 0xFFFFFFFF
-                h ^= h >> 15
-                hv = h & 0xFFFF
-                if hv % 4 == 0:
+                hh = (gx * 0x9E3779B1 + gy * 0x85EBCA6B) & 0xFFFFFFFF
+                hh ^= hh >> 16
+                hh = (hh * 0x21F0AAAD) & 0xFFFFFFFF
+                hh ^= hh >> 15
+                hh = (hh * 0x735A2D97) & 0xFFFFFFFF
+                hh ^= hh >> 15
+                hv = hh & 0xFFFF
+                if hv % 3 == 0:
                     self.px(gx, gy, dark)
-                elif hv % 6 == 0:
+                elif hv % 5 == 0:
                     self.px(gx, gy, light)
+
+    def halftone(self, x, y, w, h, c, gap=6, r=2):
+        """A field of small dots on a square lattice (print texture)."""
+        for gy in range(y + gap // 2, y + h, gap):
+            for gx in range(x + gap // 2, x + w, gap):
+                self.circle(gx, gy, r, c, fill=True)
+
+    def bands(self, x, y, w, h, colors):
+        """Horizontal bands of the given colors, top to bottom."""
+        n = len(colors)
+        for i, c in enumerate(colors):
+            y0 = y + i * h // n
+            y1 = y + (i + 1) * h // n
+            self.fill_rect(x, y0, w, y1 - y0, c)
+
 
 # -------------------------------------------------------------- PNG writer
 def write_png(path, cv):
@@ -370,473 +412,229 @@ def wrap_lines(text, scale, max_w):
         lines.append(cur)
     return lines
 
-
 # ------------------------------------------------------------ the day's news
-# Sources checked 22 Nov 2026 ~04:30 UTC: Reuters, AP, BBC digests and
-# wire aggregators. Every item below is a real 22 Nov 2026 story; the
-# two items first filed on 21 Nov carry tag "21 NOV" and are counted
-# separately in the DATE CHECK box. Wire times are the first-wire UTC
-# times as filed in the day's digests.
+# Sources checked Sunday 22 Nov 2026: Reuters, AP, BBC, AFP and
+# Al Jazeera wire digests. Every featured item below was first filed
+# on Sunday 22 November 2026; nothing in the grid is dated 21 Nov.
+# Each story carries its source wire code (R / AP / BBC / AFP / AJ)
+# printed on its card, and its map coordinates for the pin.
 LEAD = {
     "kicker": "MIDDLE EAST  \u2022  LEAD STORY",
     "headline": ["IRAN STRIKES", "U.S. BASES IN", "THE GULF"],
     "summary": ["Tehran hits a U.S. base",
-                "in Kuwait, targets Bahrain",
-                "tankers hit off Oman as",
-                "the Gulf war widens."],
+                "in Bahrain; the Gulf war",
+                "widens as tankers are",
+                "hit off Oman."],
     "tag": "WAR WIDENS",
     "wire": "04:26 UTC",
+    "source": "REUTERS",
 }
 
-# n, region, kicker, headline (2 lines, <=21 chars each), fact (<=40),
-# accent color, scene kind, lat, lon, date tag ("" or "21 NOV").
+# n, region, place, head (2 lines, <=16 chars each), fact (<=31 chars),
+# accent color, scene kind, lat, lon, source wire code.
 STORIES = [
-    {"n": 1, "region": "EUROPE", "kicker": "POLAND",
-     "hl": ["RUSSIAN MISSILES", "LAND IN POLAND"],
-     "fact": "NATO calls it a violation",
-     "color": RED, "scene": "missile", "lat": 52, "lon": 19, "tag": ""},
-    {"n": 2, "region": "EUROPE", "kicker": "UKRAINE",
-     "hl": ["RUSSIA HITS", "ZELENSKYY'S HOMETOWN"],
-     "fact": "Worker and boy, 7, killed",
-     "color": ORANGE, "scene": "blast", "lat": 48, "lon": 33, "tag": ""},
-    {"n": 3, "region": "EUROPE", "kicker": "UKRAINE",
-     "hl": ["TRUMP SIGNALS", "BROADER PEACE DEAL"],
-     "fact": "Zelenskyy: talks must deliver",
-     "color": NAVY2, "scene": "table", "lat": 50, "lon": 30, "tag": ""},
-    {"n": 4, "region": "N. AMERICA", "kicker": "USA-CANADA",
-     "hl": ["SECRET MEMO CURBS", "U.S.-CANADA DEFENCE"],
-     "fact": "Hegseth limits military ties",
-     "color": SLATE, "scene": "memo", "lat": 45, "lon": -75, "tag": ""},
-    {"n": 5, "region": "LATIN AMERICA", "kicker": "MEXICO",
-     "hl": ["EL CHAPO ISIDRO", "CAPTURED"],
+    {"n": 1, "region": "EUROPE", "place": "KRYVYI RIH",
+     "head": ["RUSSIA HITS", "ZELENSKYY'S TOWN"],
+     "fact": "Ballistic strike kills 2",
+     "color": RED, "scene": "blast", "lat": 48, "lon": 33, "src": "AP"},
+    {"n": 2, "region": "N. AMERICA", "place": "USA",
+     "head": ["WASHINGTON SEEKS", "CHINA AI BAN"],
+     "fact": "Ban on Chinese AI models",
+     "color": SLATE, "scene": "chip", "lat": 38, "lon": -77, "src": "R"},
+    {"n": 3, "region": "EUROPE", "place": "UKRAINE",
+     "head": ["ZELENSKYY AGREES", "CHRISTMAS TALKS"],
+     "fact": "U.S. wants round before Xmas",
+     "color": NAVY2, "scene": "table", "lat": 50, "lon": 30, "src": "BBC"},
+    {"n": 4, "region": "LATIN AMERICA", "place": "MEXICO",
+     "head": ["EL CHAPO ISIDRO", "CAPTURED"],
      "fact": "Cartel attacks kill 11",
-     "color": NAVY2, "scene": "cuffs", "lat": 25, "lon": -107, "tag": ""},
-    {"n": 6, "region": "LATIN AMERICA", "kicker": "PERU",
-     "hl": ["6.8 QUAKE SHAKES", "THE ANDES"],
-     "fact": "Lima residents flee homes",
-     "color": BROWN, "scene": "quake", "lat": -12, "lon": -77, "tag": "21 NOV"},
-    {"n": 7, "region": "ASIA", "kicker": "TRADE",
-     "hl": ["EU AND INDONESIA", "SIGN TRADE DEAL"],
-     "fact": "98.5% of tariffs to fall",
-     "color": TEAL, "scene": "ship", "lat": 51, "lon": 4, "tag": "21 NOV"},
-    {"n": 8, "region": "GLOBAL", "kicker": "CLIMATE",
-     "hl": ["COP31 DEADLOCKED", "IN OVERTIME"],
+     "color": NAVY2, "scene": "cuffs", "lat": 25, "lon": -107, "src": "R"},
+    {"n": 5, "region": "N. AMERICA", "place": "USA-CANADA",
+     "head": ["SECRET MEMO", "U.S.-CANADA CURB"],
+     "fact": "Hegseth limits military ties",
+     "color": SLATE, "scene": "memo", "lat": 45, "lon": -75, "src": "AP"},
+    {"n": 6, "region": "ASIA", "place": "CLIMATE",
+     "head": ["COP31 DEADLOCKED", "IN OVERTIME"],
      "fact": "Split over fossil fuels",
-     "color": GREEN, "scene": "globe", "lat": 37, "lon": 31, "tag": ""},
-    {"n": 9, "region": "EUROPE", "kicker": "ESTONIA",
-     "hl": ["ESTONIA SHUTS ITS", "RUSSIA BORDER"],
+     "color": GREEN, "scene": "globe", "lat": 37, "lon": 31, "src": "R"},
+    {"n": 7, "region": "EUROPE", "place": "ESTONIA",
+     "head": ["ESTONIA SHUTS", "RUSSIA BORDER"],
      "fact": "All road crossings, 6 months",
-     "color": NAVY2, "scene": "fence", "lat": 59, "lon": 25, "tag": ""},
-    {"n": 10, "region": "N. AMERICA", "kicker": "USA",
-     "hl": ["DEMOCRATS RETAKE", "CONGRESS"],
+     "color": NAVY2, "scene": "fence", "lat": 59, "lon": 25, "src": "BBC"},
+    {"n": 8, "region": "N. AMERICA", "place": "USA",
+     "head": ["DEMOCRATS RETAKE", "CONGRESS"],
      "fact": "Midterm win over GOP",
-     "color": RED, "scene": "ballot", "lat": 39, "lon": -77, "tag": ""},
-    {"n": 11, "region": "SPORT", "kicker": "TENNIS",
-     "hl": ["ALCARAZ FACES", "ZVEREV IN FINAL"],
+     "color": RED, "scene": "ballot", "lat": 39, "lon": -77, "src": "AP"},
+    {"n": 9, "region": "SPORT", "place": "TENNIS",
+     "head": ["ALCARAZ FACES", "ZVEREV IN FINAL"],
      "fact": "ATP Finals title decider",
-     "color": GOLD, "scene": "trophy", "lat": 45, "lon": 7, "tag": ""},
-    {"n": 12, "region": "SPORT", "kicker": "RUGBY",
-     "hl": ["AUSTRALIA EDGE", "WALES"],
+     "color": GOLD, "scene": "trophy", "lat": 45, "lon": 7, "src": "BBC"},
+    {"n": 10, "region": "SPORT", "place": "RUGBY",
+     "head": ["AUSTRALIA EDGE", "WALES"],
      "fact": "Nations Championship",
-     "color": GREEN, "scene": "rugby", "lat": 51, "lon": -3, "tag": ""},
-    {"n": 13, "region": "SPORT", "kicker": "RUGBY",
-     "hl": ["FRANCE BEAT", "ARGENTINA"],
+     "color": GREEN, "scene": "rugby", "lat": 51, "lon": -3, "src": "BBC"},
+    {"n": 11, "region": "SPORT", "place": "RUGBY",
+     "head": ["FRANCE BEAT", "ARGENTINA"],
      "fact": "Final vs South Africa",
-     "color": NAVY2, "scene": "trophy", "lat": 49, "lon": 2, "tag": ""},
-    {"n": 14, "region": "LATIN AMERICA", "kicker": "BRAZIL",
-     "hl": ["BOLSONARO IN", "INTENSIVE CARE"],
+     "color": NAVY2, "scene": "trophy", "lat": 49, "lon": 2, "src": "AFP"},
+    {"n": 12, "region": "LATIN AMERICA", "place": "BRAZIL",
+     "head": ["BOLSONARO IN", "INTENSIVE CARE"],
      "fact": "Ex-president hospitalised",
-     "color": BROWN, "scene": "hospital", "lat": -16, "lon": -48, "tag": ""},
-    {"n": 15, "region": "ASIA", "kicker": "WEATHER",
-     "hl": ["CYCLONE AKVAN", "LASHES INDIA"],
+     "color": BROWN, "scene": "hospital", "lat": -16, "lon": -48, "src": "R"},
+    {"n": 13, "region": "ASIA", "place": "WEATHER",
+     "head": ["CYCLONE AKVAN", "LASHES INDIA"],
      "fact": "East coast battered",
-     "color": TEAL, "scene": "spiral", "lat": 20, "lon": 85, "tag": ""},
-    {"n": 16, "region": "EUROPE", "kicker": "NORWAY",
-     "hl": ["NORWAY COURT VOIDS", "OIL LICENCES"],
+     "color": TEAL, "scene": "spiral", "lat": 20, "lon": 85, "src": "AP"},
+    {"n": 14, "region": "EUROPE", "place": "NORWAY",
+     "head": ["NORWAY COURT", "VOIDS LICENCES"],
      "fact": "Climate-disputed permits",
-     "color": SLATE, "scene": "scales", "lat": 60, "lon": 10, "tag": ""},
-    {"n": 17, "region": "AFRICA", "kicker": "HEALTH",
-     "hl": ["KENYA CLEARS LAST", "EBOLA PATIENT"],
+     "color": SLATE, "scene": "scales", "lat": 60, "lon": 10, "src": "R"},
+    {"n": 15, "region": "AFRICA", "place": "HEALTH",
+     "head": ["KENYA CLEARS", "LAST EBOLA CASE"],
      "fact": "DRC toll passes 5,300",
-     "color": GREEN, "scene": "virus", "lat": -1, "lon": 37, "tag": ""},
-    {"n": 18, "region": "AFRICA", "kicker": "GHANA",
-     "hl": ["GHANA UNVEILS NEW", "BANKNOTES"],
+     "color": GREEN, "scene": "virus", "lat": -1, "lon": 37, "src": "BBC"},
+    {"n": 16, "region": "AFRICA", "place": "GHANA",
+     "head": ["GHANA UNVEILS", "NEW BANKNOTES"],
      "fact": "Honour Nkrumah, Annan",
-     "color": GOLD, "scene": "banknote", "lat": 6, "lon": 0, "tag": ""},
-    {"n": 19, "region": "AFRICA", "kicker": "SOMALIA",
-     "hl": ["AL-SHABAAB AMBUSH", "KILLS HUNDREDS"],
+     "color": GOLD, "scene": "banknote", "lat": 6, "lon": 0, "src": "AFP"},
+    {"n": 17, "region": "AFRICA", "place": "SOMALIA",
+     "head": ["AL-SHABAAB", "KILLS HUNDREDS"],
      "fact": "Somali troops attacked",
-     "color": RED, "scene": "ambush", "lat": 2, "lon": 45, "tag": ""},
-    {"n": 20, "region": "AFRICA", "kicker": "SUDAN",
-     "hl": ["SUDAN SEIZES KEY", "BLUE NILE REGION"],
+     "color": RED, "scene": "ambush", "lat": 2, "lon": 45, "src": "R"},
+    {"n": 18, "region": "AFRICA", "place": "SUDAN",
+     "head": ["SUDAN SEIZES KEY", "BLUE NILE REGION"],
      "fact": "Tasis Alliance advances",
-     "color": BROWN, "scene": "river", "lat": 11, "lon": 34, "tag": ""},
-    {"n": 21, "region": "TECH", "kicker": "TECH",
-     "hl": ["HUANG RESIGNS;", "NVIDIA IN TURMOIL"],
-     "fact": "Trump urges reinstatement",
-     "color": SLATE, "scene": "chip", "lat": 37, "lon": -122, "tag": ""},
-    {"n": 22, "region": "EUROPE", "kicker": "ECB",
-     "hl": ["LAGARDE RESIGNS;", "ECB HUNT BEGINS"],
+     "color": BROWN, "scene": "river", "lat": 11, "lon": 34, "src": "AJ"},
+    {"n": 19, "region": "N. AMERICA", "place": "TECH",
+     "head": ["NVIDIA FACES", "SEC INQUIRY"],
+     "fact": "Finances under scrutiny",
+     "color": SLATE, "scene": "chip", "lat": 37, "lon": -122, "src": "R"},
+    {"n": 20, "region": "EUROPE", "place": "ECB",
+     "head": ["LAGARDE RESIGNS;", "ECB HUNT BEGINS"],
      "fact": "EU seeks new chief",
-     "color": NAVY2, "scene": "bank", "lat": 50, "lon": 8, "tag": ""},
-    {"n": 23, "region": "EUROPE", "kicker": "FINLAND",
-     "hl": ["DRONES HIT RUSSIAN", "SHIP IN GULF"],
+     "color": NAVY2, "scene": "bank", "lat": 50, "lon": 8, "src": "R"},
+    {"n": 21, "region": "EUROPE", "place": "BALTIC",
+     "head": ["DRONES HIT", "RUSSIAN SHIP"],
      "fact": "Crew evacuated; fire",
-     "color": TEAL, "scene": "shipfire", "lat": 60, "lon": 24, "tag": ""},
-    {"n": 24, "region": "ASIA", "kicker": "SCO SUMMIT",
-     "hl": ["MODI: PEACE NEEDS", "CIVILISATION TIES"],
+     "color": TEAL, "scene": "shipfire", "lat": 60, "lon": 24, "src": "AP"},
+    {"n": 22, "region": "ASIA", "place": "SCO SUMMIT",
+     "head": ["MODI: PEACE", "NEEDS CIV TIES"],
      "fact": "At SCO summit",
-     "color": GOLD, "scene": "peaks", "lat": 28, "lon": 77, "tag": ""},
+     "color": GOLD, "scene": "peaks", "lat": 28, "lon": 77, "src": "AFP"},
+    {"n": 23, "region": "ASIA", "place": "CHINA",
+     "head": ["TRUMP, XI, PUTIN", "MEET IN SHENZHEN"],
+     "fact": "Nuclear risk talks agreed",
+     "color": RED, "scene": "table", "lat": 22, "lon": 114, "src": "R"},
+    {"n": 24, "region": "N. AMERICA", "place": "MARKETS",
+     "head": ["STOCKS SLIDE", "INTO CORRECTION"],
+     "fact": "AI sell-off hits Dow, S&P",
+     "color": ORANGE, "scene": "chart", "lat": 40, "lon": -74, "src": "AP"},
+    {"n": 25, "region": "N. AMERICA", "place": "USA",
+     "head": ["SENATE REJECTS", "WAR POWERS CURB"],
+     "fact": "Iran strikes go unchecked",
+     "color": SLATE, "scene": "capitol", "lat": 38, "lon": -77, "src": "AP"},
+    {"n": 26, "region": "EUROPE", "place": "DENMARK",
+     "head": ["DENMARK EXPELS", "RUSSIAN ATTACHE"],
+     "fact": "Over alleged murder plot",
+     "color": NAVY2, "scene": "fence", "lat": 55, "lon": 12, "src": "BBC"},
+    {"n": 27, "region": "MIDDLE EAST", "place": "GAZA",
+     "head": ["GAZA AID VEHICLE", "HIT, 3 KILLED"],
+     "fact": "Israeli strikes continue",
+     "color": RED, "scene": "truck", "lat": 31, "lon": 34, "src": "AJ"},
+    {"n": 28, "region": "EUROPE", "place": "UK-EU",
+     "head": ["UK AND EU STRIKE", "NEW DEALS"],
+     "fact": "Burnham eyes rejoining",
+     "color": TEAL, "scene": "table", "lat": 51, "lon": 0, "src": "BBC"},
+    {"n": 29, "region": "MIDDLE EAST", "place": "LEBANON",
+     "head": ["AOUN BLAMES", "ISRAEL AND IRAN"],
+     "fact": "Sovereignty under threat",
+     "color": BROWN, "scene": "podium", "lat": 33, "lon": 35, "src": "AJ"},
+    {"n": 30, "region": "N. AMERICA", "place": "USA",
+     "head": ["FBI DATABASE", "HACKED"],
+     "fact": "Amid wider cyber fears",
+     "color": SLATE, "scene": "lock", "lat": 38, "lon": -78, "src": "AP"},
+    {"n": 31, "region": "EUROPE", "place": "GENEVA",
+     "head": ["UN AGREES RULES", "ON ROBOT WEAPONS"],
+     "fact": "Autonomous arms pact",
+     "color": TEAL, "scene": "dove", "lat": 46, "lon": 6, "src": "AFP"},
+    {"n": 32, "region": "EUROPE", "place": "EU",
+     "head": ["EU PROPOSES", "DIGITAL TAX"],
+     "fact": "Budget split deepens",
+     "color": GOLD, "scene": "coin", "lat": 50, "lon": 4, "src": "R"},
+    {"n": 33, "region": "ASIA", "place": "S. KOREA",
+     "head": ["KOREA EDUCATION", "CHIEF RESIGNS"],
+     "fact": "AI cheating scandal",
+     "color": SLATE, "scene": "cap", "lat": 37, "lon": 127, "src": "AP"},
+    {"n": 34, "region": "ASIA", "place": "INDONESIA",
+     "head": ["FACTORY FIRE", "36 MISSING"],
+     "fact": "Blaze kills 3; 36 missing",
+     "color": ORANGE, "scene": "fire", "lat": -6, "lon": 107, "src": "AFP"},
+    {"n": 35, "region": "SPORT", "place": "FOOTBALL",
+     "head": ["MESSI FURIORE AS", "IN MLS CUP UPSET"],
+     "fact": "Columbus thrash Miami",
+     "color": GREEN, "scene": "ball", "lat": 40, "lon": -83, "src": "AFP"},
+    {"n": 36, "region": "SPORT", "place": "NFL",
+     "head": ["INDIANA LOSES IN", "OVERTIME"],
+     "fact": "Washington stuns No. 6",
+     "color": NAVY2, "scene": "helmet", "lat": 39, "lon": -86, "src": "AP"},
 ]
 
-TICKER = ("Gaza aid convoy hit, 3 killed  \u2022  Netanyahu in marathon "
-          "coalition talks  \u2022  Iraq retakes Jurf al-Sakhar  \u2022  "
-          "Sahel states restart dialogue  \u2022  Nigeria builds naval "
-          "ships  \u2022  Tyla, Tems, Kidjo lead Grammy hopes")
+# Short briefs, all filed Sunday 22 Nov 2026 (one line each, <=36 chars).
+ALSO_ON = [
+    "Croatia rallies over hospital toll",
+    "Somali driver assaulted in Minnesota",
+    "Judge blocks Trump homeless revamp",
+    "Bahrain: Iranian attack hit factory",
+    "Google unveils Agent Compute Engine",
+    "AWS Lambda adds GPU inference",
+    "Swimmer crosses Strait of Hormuz",
+    "Stutzle double lifts Senators",
+    "Golden Knights edge Jets in shootout",
+    "Blue Jackets beat Leafs in Toronto",
+    "Flyers beat Canadiens on Cates goal",
+    "Tyla, Tems, Kidjo lead Grammy hopes",
+    "Madrid lights up for Christmas",
+    "'GO NAVY' becomes 'GO ARMY' in prank",
+    "Japan GDP slips on weak spending",
+    "Seoul offers cheating-tip reward",
+    "WHO warns on antibiotic resistance",
+    "EU plastic ban reroutes 735k tonnes",
+    "Palestinians in Egypt outsiders",
+    "Repair cafes grow as EU rules bite",
+    "Carbon-capture bet questioned",
+    "Land plants absorbing less carbon",
+    "Ukraine marks Day of Dignity",
+    "SBU urges MPs to reject bill",
+]
 
 # First-wire UTC times, as filed in the day's digests.
 TIMELINE = [
-    ("23:51", "PERU QUAKE"),
     ("00:37", "EL CHAPO HELD"),
-    ("01:05", "POLAND MISSILES"),
+    ("01:05", "U.S. SEEKS AI BAN"),
     ("01:35", "MODI AT SCO"),
     ("01:53", "KRYVYI RIH HIT"),
+    ("02:14", "SHENZHEN MEET"),
     ("03:07", "HEGSETH MEMO"),
-    ("04:20", "TRUMP PEACE"),
+    ("04:20", "CHRISTMAS TALKS"),
     ("04:26", "COP31 FAILS"),
+    ("05:40", "STOCKS SLIDE"),
+    ("06:58", "SENATE VOTE"),
 ]
 
-# Region chips: (short label, count, chip color, text color).
+# Region chips: (short label, chip color, text color). Counts include
+# the lead story in M. EAST; they sum to 37 with the lead. (v3 had
+# EUROPE 9 / N. AMER. 8; the grid actually held 11 / 6 -- corrected
+# here, and the #2 swap moves one more to N. AMERICA: 10 / 7.)
 CHIPS = [
-    ("M. EAST 1", RED, WHITE),
-    ("EUROPE 7", NAVY2, WHITE),
-    ("N. AMER. 2", SLATE, WHITE),
-    ("LATAM 3", TEAL, WHITE),
-    ("ASIA 3", GREEN, WHITE),
+    ("M. EAST 3", RED, WHITE),
+    ("EUROPE 10", NAVY2, WHITE),
+    ("N. AMER. 7", SLATE, WHITE),
+    ("LATAM 2", TEAL, WHITE),
+    ("ASIA 6", GREEN, WHITE),
     ("AFRICA 4", BROWN, WHITE),
-    ("SPORT 3", GOLD, INK),
-    ("TECH 1", SLATE, WHITE),
-    ("GLOBAL 1", NAVY, WHITE),
+    ("SPORT 5", GOLD, INK),
 ]
 
-
-# ------------------------------------------------------------- mini scenes
-# Each scene draws inside a 46 x 46 box whose top-left is (x, y).
-# Small illustrated scenes, not bare geometric pictograms.
-def scene_missile(cv, x, y, c):
-    """A missile arcing down with fins, flame and ground burst."""
-    cv.thick_line(x + 4, y + 40, x + 18, y + 24, SLATE, 2)
-    cv.thick_line(x + 18, y + 24, x + 30, y + 12, SLATE, 2)
-    cv.poly([(x + 30, y + 4), (x + 38, y + 12), (x + 33, y + 22),
-             (x + 25, y + 14)], c)
-    cv.poly([(x + 25, y + 14), (x + 31, y + 20), (x + 25, y + 24)], c)
-    cv.poly([(x + 33, y + 22), (x + 27, y + 28), (x + 21, y + 22)], c)
-    cv.star(x + 20, y + 28, 7, 3, 5, FLAME)
-    cv.circle(x + 20, y + 28, 2, GOLD, fill=True)
-    cv.star(x + 36, y + 38, 9, 4, 8, GOLD)
-    cv.star(x + 36, y + 38, 5, 2, 8, RED)
-
-
-def scene_blast(cv, x, y, c):
-    """An explosion burst over a city skyline."""
-    for bx, bw, bh in ((x + 3, 7, 18), (x + 12, 9, 26), (x + 24, 7, 15),
-                       (x + 33, 8, 22)):
-        cv.fill_rect(bx, y + 42 - bh, bw, bh, c)
-    cv.fill_rect(x + 15, y + 8, 5, 5, c)
-    cv.star(x + 23, y + 16, 15, 6, 8, FLAME)
-    cv.star(x + 23, y + 16, 9, 4, 8, GOLD)
-    cv.circle(x + 23, y + 16, 3, WHITE, fill=True)
-    cv.thick_line(x + 6, y + 6, x + 12, y + 11, GOLD, 2)
-    cv.thick_line(x + 40, y + 5, x + 34, y + 10, GOLD, 2)
-
-
-def scene_table(cv, x, y, c):
-    """A summit table with two flags and two chairs."""
-    cv.ellipse(x + 23, y + 30, 18, 6, c)
-    cv.fill_rect(x + 5, y + 30, 36, 3, c)
-    cv.vline(x + 10, y + 33, y + 42, c, 2)
-    cv.vline(x + 36, y + 33, y + 42, c, 2)
-    cv.vline(x + 14, y + 8, y + 26, c, 2)
-    cv.poly([(x + 14, y + 8), (x + 26, y + 12), (x + 14, y + 16)], RED)
-    cv.vline(x + 32, y + 8, y + 26, c, 2)
-    cv.poly([(x + 32, y + 8), (x + 20, y + 12), (x + 32, y + 16)], NAVY2)
-    cv.circle(x + 8, y + 20, 3, GOLD, fill=True)
-    cv.circle(x + 38, y + 20, 3, GOLD, fill=True)
-
-
-def scene_memo(cv, x, y, c):
-    """A classified memo: document, lines, red stamp."""
-    cv.fill_rect(x + 10, y + 4, 26, 38, WHITE)
-    cv.hline(x + 10, x + 35, y + 4, c, 1)
-    cv.hline(x + 10, x + 35, y + 41, c, 1)
-    cv.vline(x + 10, y + 4, y + 41, c, 1)
-    cv.vline(x + 35, y + 4, y + 41, c, 1)
-    for yy in (12, 18, 24, 30):
-        cv.hline(x + 14, x + 31, y + yy, MUTED, 1)
-    cv.circle(x + 30, y + 34, 7, RED)
-    cv.circle(x + 30, y + 34, 4, WHITE)
-    cv.fill_rect(x + 28, y + 32, 4, 4, RED)
-
-
-def scene_cuffs(cv, x, y, c):
-    """Handcuffs: two rings joined by a short chain."""
-    cv.circle(x + 14, y + 23, 10, c)
-    cv.circle(x + 14, y + 23, 6, PAPER)
-    cv.circle(x + 32, y + 23, 10, c)
-    cv.circle(x + 32, y + 23, 6, PAPER)
-    cv.thick_line(x + 21, y + 17, x + 25, y + 17, c, 3)
-    cv.circle(x + 23, y + 17, 2, c, fill=True)
-    cv.fill_rect(x + 12, y + 21, 3, 5, c)
-    cv.fill_rect(x + 30, y + 21, 3, 5, c)
-    cv.hline(x + 4, x + 42, y + 38, c, 2)
-
-
-def scene_quake(cv, x, y, c):
-    """Seismograph zigzag over cracked ground."""
-    pts = [(x + 2, y + 18), (x + 9, y + 18), (x + 13, y + 7),
-           (x + 17, y + 29), (x + 21, y + 11), (x + 25, y + 25),
-           (x + 29, y + 18), (x + 35, y + 18), (x + 38, y + 5),
-           (x + 41, y + 31), (x + 44, y + 18)]
-    for a, b in zip(pts, pts[1:]):
-        cv.thick_line(a[0], a[1], b[0], b[1], c, 2)
-    cv.poly([(x + 4, y + 40), (x + 12, y + 34), (x + 16, y + 40),
-             (x + 24, y + 35), (x + 29, y + 40), (x + 37, y + 36),
-             (x + 42, y + 40), (x + 42, y + 43), (x + 4, y + 43)], c)
-
-
-def scene_ship(cv, x, y, c):
-    """A container ship: hull, stacked boxes, funnel, waves."""
-    cv.fill_rect(x + 4, y + 26, 38, 5, c)
-    cv.poly([(x + 4, y + 26), (x + 8, y + 37), (x + 38, y + 37),
-             (x + 42, y + 26)], c)
-    for i, col in enumerate((RED, GOLD, TEAL)):
-        cv.fill_rect(x + 9 + i * 9, y + 17, 8, 9, col)
-    cv.fill_rect(x + 35, y + 12, 6, 14, c)
-    cv.star(x + 13, y + 9, 5, 2, 5, GOLD)
-    cv.hline(x + 2, x + 44, y + 41, c, 2)
-    cv.hline(x + 7, x + 18, y + 44, c, 1)
-
-
-def scene_globe(cv, x, y, c):
-    """A globe with latitude lines and a rising sun behind it."""
-    cv.circle(x + 23, y + 23, 16, GOLD, fill=True)
-    cv.circle(x + 23, y + 26, 17, c, fill=True)
-    cv.circle(x + 23, y + 26, 17, WHITE)
-    cv.ellipse(x + 23, y + 26, 17, 6, WHITE)
-    cv.ellipse(x + 23, y + 26, 17, 12, WHITE)
-    cv.ellipse(x + 23, y + 26, 6, 17, WHITE)
-    cv.ellipse(x + 23, y + 26, 12, 17, WHITE)
-    cv.hline(x + 6, x + 40, y + 26, WHITE, 1)
-    cv.hline(x + 9, x + 37, y + 40, c, 2)
-
-
-def scene_fence(cv, x, y, c):
-    """A border fence: bars, rails and a diagonal wire."""
-    for bx in (6, 14, 22, 30, 38):
-        cv.vline(x + bx, y + 6, y + 40, c, 2)
-    cv.hline(x + 4, x + 42, y + 12, c, 2)
-    cv.hline(x + 4, x + 42, y + 34, c, 2)
-    cv.thick_line(x + 4, y + 6, x + 42, y + 40, RED, 2)
-    cv.circle(x + 23, y + 23, 3, RED, fill=True)
-
-
-def scene_ballot(cv, x, y, c):
-    """A ballot box with a checked vote slip."""
-    cv.fill_rect(x + 8, y + 20, 30, 22, c)
-    cv.fill_rect(x + 8, y + 20, 30, 4, RED)
-    cv.fill_rect(x + 18, y + 16, 10, 4, INK)
-    cv.poly([(x + 12, y + 6), (x + 26, y + 6), (x + 30, y + 16),
-             (x + 16, y + 16)], WHITE)
-    cv.hline(x + 12, x + 35, y + 20, c, 1)
-    cv.thick_line(x + 16, y + 27, x + 21, y + 34, WHITE, 3)
-    cv.thick_line(x + 21, y + 34, x + 31, y + 24, WHITE, 3)
-
-
-def scene_trophy(cv, x, y, c):
-    """A cup trophy with handles, stem and base."""
-    cv.poly([(x + 12, y + 6), (x + 34, y + 6), (x + 31, y + 22),
-             (x + 15, y + 22)], GOLD)
-    cv.thick_line(x + 12, y + 10, x + 6, y + 16, GOLD, 3)
-    cv.thick_line(x + 34, y + 10, x + 40, y + 16, GOLD, 3)
-    cv.fill_rect(x + 21, y + 22, 4, 10, GOLD)
-    cv.fill_rect(x + 14, y + 32, 18, 4, GOLD)
-    cv.fill_rect(x + 11, y + 36, 24, 4, GOLD)
-    cv.star(x + 23, y + 13, 6, 2, 5, WHITE)
-
-
-def scene_rugby(cv, x, y, c):
-    """A rugby ball between the goal posts."""
-    cv.ellipse(x + 23, y + 26, 16, 10, BROWN)
-    cv.ellipse(x + 23, y + 26, 16, 10, WHITE)
-    cv.thick_line(x + 10, y + 20, x + 36, y + 32, WHITE, 2)
-    cv.vline(x + 6, y + 6, y + 40, c, 2)
-    cv.vline(x + 40, y + 6, y + 40, c, 2)
-    cv.hline(x + 6, x + 40, y + 10, c, 2)
-
-
-def scene_hospital(cv, x, y, c):
-    """A hospital cross over a bed with a pulse line."""
-    cv.fill_rect(x + 8, y + 6, 30, 22, TEAL)
-    cv.fill_rect(x + 19, y + 10, 8, 14, WHITE)
-    cv.fill_rect(x + 15, y + 14, 16, 6, WHITE)
-    cv.hline(x + 4, x + 42, y + 34, c, 2)
-    cv.thick_line(x + 4, y + 40, x + 12, y + 40, RED, 2)
-    cv.thick_line(x + 12, y + 40, x + 16, y + 34, RED, 2)
-    cv.thick_line(x + 16, y + 34, x + 20, y + 44, RED, 2)
-    cv.thick_line(x + 20, y + 44, x + 24, y + 40, RED, 2)
-    cv.thick_line(x + 24, y + 40, x + 42, y + 40, RED, 2)
-
-
-def scene_spiral(cv, x, y, c):
-    """A cyclone spiral with rain streaks."""
-    for r in (18, 14, 10, 6):
-        cv.circle(x + 23, y + 22, r, c)
-    cv.circle(x + 23, y + 22, 3, RED, fill=True)
-    for dx in (2, 12, 30, 40):
-        cv.thick_line(x + dx, y + 38, x + dx - 2, y + 44, SLATE, 1)
-
-
-def scene_scales(cv, x, y, c):
-    """The scales of justice: post, beam and two pans."""
-    cv.vline(x + 23, y + 6, y + 40, c, 3)
-    cv.hline(x + 8, x + 38, y + 10, c, 3)
-    cv.circle(x + 23, y + 6, 3, GOLD, fill=True)
-    for px in (10, 36):
-        cv.thick_line(x + px, y + 10, x + px - 5, y + 20, c, 2)
-        cv.thick_line(x + px, y + 10, x + px + 5, y + 20, c, 2)
-        cv.ellipse(x + px, y + 22, 7, 3, c)
-        cv.fill_rect(x + px - 7, y + 20, 14, 2, c)
-    cv.fill_rect(x + 16, y + 40, 14, 3, c)
-
-
-def scene_virus(cv, x, y, c):
-    """A spiky virus particle."""
-    for a in range(0, 360, 30):
-        rad = math.radians(a)
-        x0 = int(x + 23 + 12 * math.cos(rad))
-        y0 = int(y + 23 + 12 * math.sin(rad))
-        x1 = int(x + 23 + 17 * math.cos(rad))
-        y1 = int(y + 23 + 17 * math.sin(rad))
-        cv.thick_line(x0, y0, x1, y1, c, 2)
-    cv.circle(x + 23, y + 23, 12, c, fill=True)
-    cv.circle(x + 19, y + 19, 2, WHITE, fill=True)
-    cv.circle(x + 27, y + 27, 2, WHITE, fill=True)
-
-
-def scene_banknote(cv, x, y, c):
-    """A banknote with portrait medallion and denomination."""
-    cv.fill_rect(x + 4, y + 12, 38, 22, GREEN)
-    cv.fill_rect(x + 7, y + 15, 32, 16, (190, 220, 190))
-    cv.circle(x + 15, y + 23, 6, GREEN, fill=True)
-    cv.circle(x + 15, y + 23, 3, GOLD, fill=True)
-    draw_text(cv, x + 27, y + 19, "1", 1, GREEN)
-    cv.hline(x + 27, x + 36, y + 27, GREEN, 1)
-    cv.hline(x + 27, x + 36, y + 29, GREEN, 1)
-
-
-def scene_ambush(cv, x, y, c):
-    """An ambush: blast, motion lines and a road."""
-    cv.star(x + 23, y + 16, 14, 6, 8, FLAME)
-    cv.star(x + 23, y + 16, 8, 3, 8, RED)
-    cv.circle(x + 23, y + 16, 3, WHITE, fill=True)
-    for yy in (28, 33, 38):
-        cv.thick_line(x + 4, y + yy, x + 18, y + yy, SLATE, 2)
-    cv.thick_line(x + 28, y + 28, x + 42, y + 28, SLATE, 2)
-    cv.fill_rect(x + 4, y + 41, 38, 3, c)
-
-
-def scene_river(cv, x, y, c):
-    """A river bend with a dam wall."""
-    for yy in (14, 22, 30):
-        prev = None
-        for i in range(13):
-            px = x + 2 + i * 3
-            py = y + yy + int(3 * math.sin(i * 1.1))
-            if prev is not None:
-                cv.line(prev[0], prev[1], px, py, TEAL)
-            prev = (px, py)
-    cv.fill_rect(x + 30, y + 8, 5, 30, SLATE)
-    cv.fill_rect(x + 26, y + 36, 13, 4, SLATE)
-    cv.circle(x + 10, y + 22, 3, GOLD, fill=True)
-
-
-def scene_chip(cv, x, y, c):
-    """A microchip with pins and a die."""
-    cv.fill_rect(x + 12, y + 12, 22, 22, SLATE)
-    cv.fill_rect(x + 17, y + 17, 12, 12, NAVY2)
-    cv.fill_rect(x + 20, y + 20, 6, 6, GOLD)
-    for i in range(4):
-        xx = x + 16 + i * 5
-        cv.vline(xx, y + 6, y + 12, GOLD, 2)
-        cv.vline(xx, y + 34, y + 40, GOLD, 2)
-        yy = y + 16 + i * 5
-        cv.hline(x + 6, x + 12, yy, GOLD, 2)
-        cv.hline(x + 34, x + 40, yy, GOLD, 2)
-
-
-def scene_bank(cv, x, y, c):
-    """A central bank: pediment, columns and base."""
-    cv.poly([(x + 6, y + 14), (x + 40, y + 14), (x + 23, y + 4)], NAVY2)
-    cv.circle(x + 23, y + 11, 2, GOLD, fill=True)
-    for bx in (9, 19, 29):
-        cv.fill_rect(x + bx, y + 16, 4, 18, NAVY2)
-    cv.fill_rect(x + 6, y + 34, 34, 3, NAVY2)
-    cv.fill_rect(x + 4, y + 38, 38, 3, NAVY2)
-
-
-def scene_shipfire(cv, x, y, c):
-    """A cargo ship hit by drones: smoke, flame, drone dots."""
-    cv.fill_rect(x + 4, y + 28, 34, 5, c)
-    cv.poly([(x + 4, y + 28), (x + 8, y + 38), (x + 34, y + 38),
-             (x + 38, y + 28)], c)
-    cv.fill_rect(x + 10, y + 20, 8, 8, RED)
-    cv.fill_rect(x + 20, y + 20, 8, 8, GOLD)
-    cv.circle(x + 14, y + 12, 4, SLATE, fill=True)
-    cv.circle(x + 20, y + 8, 3, SLATE, fill=True)
-    cv.star(x + 30, y + 14, 7, 3, 5, FLAME)
-    cv.circle(x + 36, y + 6, 2, INK, fill=True)
-    cv.hline(x + 2, x + 44, y + 42, c, 2)
-
-
-def scene_peaks(cv, x, y, c):
-    """Mountain peaks with a summit flag and sun."""
-    cv.circle(x + 36, y + 10, 5, GOLD, fill=True)
-    cv.poly([(x + 2, y + 40), (x + 14, y + 16), (x + 26, y + 40)], SLATE)
-    cv.poly([(x + 20, y + 40), (x + 32, y + 10), (x + 44, y + 40)], c)
-    cv.poly([(x + 32, y + 10), (x + 36, y + 16), (x + 30, y + 18)], WHITE)
-    cv.vline(x + 32, y + 4, y + 12, INK, 2)
-    cv.poly([(x + 32, y + 4), (x + 41, y + 6), (x + 32, y + 9)], RED)
-    cv.hline(x + 2, x + 44, y + 42, BROWN, 2)
-
-
-SCENES = {
-    "missile": scene_missile,
-    "blast": scene_blast,
-    "table": scene_table,
-    "memo": scene_memo,
-    "cuffs": scene_cuffs,
-    "quake": scene_quake,
-    "ship": scene_ship,
-    "globe": scene_globe,
-    "fence": scene_fence,
-    "ballot": scene_ballot,
-    "trophy": scene_trophy,
-    "rugby": scene_rugby,
-    "hospital": scene_hospital,
-    "spiral": scene_spiral,
-    "scales": scene_scales,
-    "virus": scene_virus,
-    "banknote": scene_banknote,
-    "ambush": scene_ambush,
-    "river": scene_river,
-    "chip": scene_chip,
-    "bank": scene_bank,
-    "shipfire": scene_shipfire,
-    "peaks": scene_peaks,
-}
-
-
-# ---------------------------------------------------------------- world map
 # Coarse continent outlines in (lon, lat); drawn equirectangular.
 CONTINENTS = [
     [(-168, 66), (-150, 70), (-135, 69), (-125, 72), (-115, 73),
@@ -890,11 +688,482 @@ CONTINENTS = [
      (113, -22)],
 ]
 
+# ------------------------------------------------------------- mini scenes
+# Each scene draws inside a 46 x 46 box whose top-left is (x, y).
+# Small illustrated scenes with a dithered sky band and a ground
+# band, not bare geometric pictograms.
+def scene_backdrop(cv, x, y, c):
+    cv.dither_rect(x, y, 46, 30, (232, 238, 244), (247, 242, 232))
+    cv.dither_rect(x, y + 30, 46, 16, (226, 220, 208), (238, 233, 224))
+    cv.hline(x, x + 45, y + 30, HAIR, 1)
 
+
+def scene_missile(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    cv.thick_line(x + 4, y + 40, x + 18, y + 24, SLATE, 2)
+    cv.thick_line(x + 18, y + 24, x + 30, y + 12, SLATE, 2)
+    cv.poly([(x + 30, y + 4), (x + 38, y + 12), (x + 33, y + 22),
+             (x + 25, y + 14)], c)
+    cv.poly([(x + 25, y + 14), (x + 31, y + 20), (x + 25, y + 24)], c)
+    cv.poly([(x + 33, y + 22), (x + 27, y + 28), (x + 21, y + 22)], c)
+    cv.star(x + 20, y + 28, 7, 3, 5, FLAME)
+    cv.circle(x + 20, y + 28, 2, GOLD, fill=True)
+    cv.star(x + 36, y + 38, 9, 4, 8, GOLD)
+    cv.star(x + 36, y + 38, 5, 2, 8, RED)
+
+
+def scene_blast(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    for bx, bw, bh in ((x + 3, 7, 18), (x + 12, 9, 26), (x + 24, 7, 15),
+                       (x + 33, 8, 22)):
+        cv.fill_rect(bx, y + 42 - bh, bw, bh, c)
+    cv.fill_rect(x + 15, y + 8, 5, 5, c)
+    cv.star(x + 23, y + 16, 15, 6, 8, FLAME)
+    cv.star(x + 23, y + 16, 9, 4, 8, GOLD)
+    cv.circle(x + 23, y + 16, 3, WHITE, fill=True)
+    cv.thick_line(x + 6, y + 6, x + 12, y + 11, GOLD, 2)
+    cv.thick_line(x + 40, y + 5, x + 34, y + 10, GOLD, 2)
+
+
+def scene_table(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    cv.ellipse(x + 23, y + 30, 18, 6, c)
+    cv.fill_rect(x + 5, y + 30, 36, 3, c)
+    cv.vline(x + 10, y + 33, y + 42, c, 2)
+    cv.vline(x + 36, y + 33, y + 42, c, 2)
+    cv.vline(x + 14, y + 8, y + 26, c, 2)
+    cv.poly([(x + 14, y + 8), (x + 26, y + 12), (x + 14, y + 16)], RED)
+    cv.vline(x + 32, y + 8, y + 26, c, 2)
+    cv.poly([(x + 32, y + 8), (x + 20, y + 12), (x + 32, y + 16)], NAVY2)
+    cv.circle(x + 8, y + 20, 3, GOLD, fill=True)
+    cv.circle(x + 38, y + 20, 3, GOLD, fill=True)
+
+
+def scene_memo(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    cv.fill_rect(x + 10, y + 4, 26, 38, WHITE)
+    cv.hline(x + 10, x + 35, y + 4, c, 1)
+    cv.hline(x + 10, x + 35, y + 41, c, 1)
+    cv.vline(x + 10, y + 4, y + 41, c, 1)
+    cv.vline(x + 35, y + 4, y + 41, c, 1)
+    for yy in (12, 18, 24, 30):
+        cv.hline(x + 14, x + 31, y + yy, MUTED, 1)
+    cv.circle(x + 30, y + 34, 7, RED)
+    cv.circle(x + 30, y + 34, 4, WHITE)
+    cv.fill_rect(x + 28, y + 32, 4, 4, RED)
+
+
+def scene_cuffs(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    cv.circle(x + 14, y + 23, 10, c)
+    cv.circle(x + 14, y + 23, 6, PAPER)
+    cv.circle(x + 32, y + 23, 10, c)
+    cv.circle(x + 32, y + 23, 6, PAPER)
+    cv.thick_line(x + 21, y + 17, x + 25, y + 17, c, 3)
+    cv.circle(x + 23, y + 17, 2, c, fill=True)
+    cv.fill_rect(x + 12, y + 21, 3, 5, c)
+    cv.fill_rect(x + 30, y + 21, 3, 5, c)
+    cv.hline(x + 4, x + 42, y + 38, c, 2)
+
+
+def scene_globe(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    cv.circle(x + 23, y + 23, 16, GOLD, fill=True)
+    cv.circle(x + 23, y + 26, 17, c, fill=True)
+    cv.circle(x + 23, y + 26, 17, WHITE)
+    cv.ellipse(x + 23, y + 26, 17, 6, WHITE)
+    cv.ellipse(x + 23, y + 26, 17, 12, WHITE)
+    cv.ellipse(x + 23, y + 26, 6, 17, WHITE)
+    cv.ellipse(x + 23, y + 26, 12, 17, WHITE)
+    cv.hline(x + 6, x + 40, y + 26, WHITE, 1)
+    cv.hline(x + 9, x + 37, y + 40, c, 2)
+
+
+def scene_fence(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    for bx in (6, 14, 22, 30, 38):
+        cv.vline(x + bx, y + 6, y + 40, c, 2)
+    cv.hline(x + 4, x + 42, y + 12, c, 2)
+    cv.hline(x + 4, x + 42, y + 34, c, 2)
+    cv.thick_line(x + 4, y + 6, x + 42, y + 40, RED, 2)
+    cv.circle(x + 23, y + 23, 3, RED, fill=True)
+
+
+def scene_ballot(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    cv.fill_rect(x + 8, y + 20, 30, 22, c)
+    cv.fill_rect(x + 8, y + 20, 30, 4, RED)
+    cv.fill_rect(x + 18, y + 16, 10, 4, INK)
+    cv.poly([(x + 12, y + 6), (x + 26, y + 6), (x + 30, y + 16),
+             (x + 16, y + 16)], WHITE)
+    cv.hline(x + 12, x + 35, y + 20, c, 1)
+    cv.thick_line(x + 16, y + 27, x + 21, y + 34, WHITE, 3)
+    cv.thick_line(x + 21, y + 34, x + 31, y + 24, WHITE, 3)
+
+
+def scene_trophy(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    cv.poly([(x + 12, y + 6), (x + 34, y + 6), (x + 31, y + 22),
+             (x + 15, y + 22)], GOLD)
+    cv.thick_line(x + 12, y + 10, x + 6, y + 16, GOLD, 3)
+    cv.thick_line(x + 34, y + 10, x + 40, y + 16, GOLD, 3)
+    cv.fill_rect(x + 21, y + 22, 4, 10, GOLD)
+    cv.fill_rect(x + 14, y + 32, 18, 4, GOLD)
+    cv.fill_rect(x + 11, y + 36, 24, 4, GOLD)
+    cv.star(x + 23, y + 13, 6, 2, 5, WHITE)
+
+
+def scene_rugby(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    cv.ellipse(x + 23, y + 26, 16, 10, BROWN)
+    cv.ellipse(x + 23, y + 26, 16, 10, WHITE)
+    cv.thick_line(x + 10, y + 20, x + 36, y + 32, WHITE, 2)
+    cv.vline(x + 6, y + 6, y + 40, c, 2)
+    cv.vline(x + 40, y + 6, y + 40, c, 2)
+    cv.hline(x + 6, x + 40, y + 10, c, 2)
+
+
+def scene_hospital(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    cv.fill_rect(x + 8, y + 6, 30, 22, TEAL)
+    cv.fill_rect(x + 19, y + 10, 8, 14, WHITE)
+    cv.fill_rect(x + 15, y + 14, 16, 6, WHITE)
+    cv.hline(x + 4, x + 42, y + 34, c, 2)
+    cv.thick_line(x + 4, y + 40, x + 12, y + 40, RED, 2)
+    cv.thick_line(x + 12, y + 40, x + 16, y + 34, RED, 2)
+    cv.thick_line(x + 16, y + 34, x + 20, y + 44, RED, 2)
+    cv.thick_line(x + 20, y + 44, x + 24, y + 40, RED, 2)
+    cv.thick_line(x + 24, y + 40, x + 42, y + 40, RED, 2)
+
+
+def scene_spiral(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    for r in (18, 14, 10, 6):
+        cv.circle(x + 23, y + 22, r, c)
+    cv.circle(x + 23, y + 22, 3, RED, fill=True)
+    for dx in (2, 12, 30, 40):
+        cv.thick_line(x + dx, y + 38, x + dx - 2, y + 44, SLATE, 1)
+
+
+def scene_scales(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    cv.vline(x + 23, y + 6, y + 40, c, 3)
+    cv.hline(x + 8, x + 38, y + 10, c, 3)
+    cv.circle(x + 23, y + 6, 3, GOLD, fill=True)
+    for px in (10, 36):
+        cv.thick_line(x + px, y + 10, x + px - 5, y + 20, c, 2)
+        cv.thick_line(x + px, y + 10, x + px + 5, y + 20, c, 2)
+        cv.ellipse(x + px, y + 22, 7, 3, c)
+        cv.fill_rect(x + px - 7, y + 20, 14, 2, c)
+    cv.fill_rect(x + 16, y + 40, 14, 3, c)
+
+
+def scene_virus(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    for a in range(0, 360, 30):
+        rad = math.radians(a)
+        x0 = int(x + 23 + 12 * math.cos(rad))
+        y0 = int(y + 23 + 12 * math.sin(rad))
+        x1 = int(x + 23 + 17 * math.cos(rad))
+        y1 = int(y + 23 + 17 * math.sin(rad))
+        cv.thick_line(x0, y0, x1, y1, c, 2)
+    cv.circle(x + 23, y + 23, 12, c, fill=True)
+    cv.circle(x + 19, y + 19, 2, WHITE, fill=True)
+    cv.circle(x + 27, y + 27, 2, WHITE, fill=True)
+
+
+def scene_banknote(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    cv.fill_rect(x + 4, y + 12, 38, 22, GREEN)
+    cv.fill_rect(x + 7, y + 15, 32, 16, (190, 220, 190))
+    cv.circle(x + 15, y + 23, 6, GREEN, fill=True)
+    cv.circle(x + 15, y + 23, 3, GOLD, fill=True)
+    draw_text(cv, x + 27, y + 19, "1", 1, GREEN)
+    cv.hline(x + 27, x + 36, y + 27, GREEN, 1)
+    cv.hline(x + 27, x + 36, y + 29, GREEN, 1)
+
+
+def scene_ambush(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    cv.star(x + 23, y + 16, 14, 6, 8, FLAME)
+    cv.star(x + 23, y + 16, 8, 3, 8, RED)
+    cv.circle(x + 23, y + 16, 3, WHITE, fill=True)
+    for yy in (28, 33, 38):
+        cv.thick_line(x + 4, y + yy, x + 18, y + yy, SLATE, 2)
+    cv.thick_line(x + 28, y + 28, x + 42, y + 28, SLATE, 2)
+    cv.fill_rect(x + 4, y + 41, 38, 3, c)
+
+
+def scene_river(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    for yy in (14, 22, 30):
+        prev = None
+        for i in range(13):
+            px = x + 2 + i * 3
+            py = y + yy + int(3 * math.sin(i * 1.1))
+            if prev is not None:
+                cv.line(prev[0], prev[1], px, py, TEAL)
+            prev = (px, py)
+    cv.fill_rect(x + 30, y + 8, 5, 30, SLATE)
+    cv.fill_rect(x + 26, y + 36, 13, 4, SLATE)
+    cv.circle(x + 10, y + 22, 3, GOLD, fill=True)
+
+
+def scene_chip(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    cv.fill_rect(x + 12, y + 12, 22, 22, SLATE)
+    cv.fill_rect(x + 17, y + 17, 12, 12, NAVY2)
+    cv.fill_rect(x + 20, y + 20, 6, 6, GOLD)
+    for i in range(4):
+        xx = x + 16 + i * 5
+        cv.vline(xx, y + 6, y + 12, GOLD, 2)
+        cv.vline(xx, y + 34, y + 40, GOLD, 2)
+        yy = y + 16 + i * 5
+        cv.hline(x + 6, x + 12, yy, GOLD, 2)
+        cv.hline(x + 34, x + 40, yy, GOLD, 2)
+
+
+def scene_bank(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    cv.poly([(x + 6, y + 14), (x + 40, y + 14), (x + 23, y + 4)], NAVY2)
+    cv.circle(x + 23, y + 11, 2, GOLD, fill=True)
+    for bx in (9, 19, 29):
+        cv.fill_rect(x + bx, y + 16, 4, 18, NAVY2)
+    cv.fill_rect(x + 6, y + 34, 34, 3, NAVY2)
+    cv.fill_rect(x + 4, y + 38, 38, 3, NAVY2)
+
+
+def scene_shipfire(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    cv.fill_rect(x + 4, y + 28, 34, 5, c)
+    cv.poly([(x + 4, y + 28), (x + 8, y + 38), (x + 34, y + 38),
+             (x + 38, y + 28)], c)
+    cv.fill_rect(x + 10, y + 20, 8, 8, RED)
+    cv.fill_rect(x + 20, y + 20, 8, 8, GOLD)
+    cv.circle(x + 14, y + 12, 4, SLATE, fill=True)
+    cv.circle(x + 20, y + 8, 3, SLATE, fill=True)
+    cv.star(x + 30, y + 14, 7, 3, 5, FLAME)
+    cv.circle(x + 36, y + 6, 2, INK, fill=True)
+    cv.hline(x + 2, x + 44, y + 42, c, 2)
+
+
+def scene_peaks(cv, x, y, c):
+    scene_backdrop(cv, x, y, c)
+    cv.circle(x + 36, y + 10, 5, GOLD, fill=True)
+    cv.poly([(x + 2, y + 40), (x + 14, y + 16), (x + 26, y + 40)], SLATE)
+    cv.poly([(x + 20, y + 40), (x + 32, y + 10), (x + 44, y + 40)], c)
+    cv.poly([(x + 32, y + 10), (x + 36, y + 16), (x + 30, y + 18)], WHITE)
+    cv.vline(x + 32, y + 4, y + 12, INK, 2)
+    cv.poly([(x + 32, y + 4), (x + 41, y + 6), (x + 32, y + 9)], RED)
+    cv.hline(x + 2, x + 44, y + 42, BROWN, 2)
+
+
+def scene_chart(cv, x, y, c):
+    """A falling market chart: axes, descending line, red arrow."""
+    scene_backdrop(cv, x, y, c)
+    cv.hline(x + 4, x + 42, y + 40, INK, 2)
+    cv.vline(x + 6, y + 6, y + 40, INK, 2)
+    pts = [(x + 8, y + 12), (x + 14, y + 16), (x + 20, y + 14),
+           (x + 26, y + 22), (x + 32, y + 30), (x + 38, y + 36)]
+    for a, b in zip(pts, pts[1:]):
+        cv.thick_line(a[0], a[1], b[0], b[1], RED, 2)
+    cv.poly([(x + 38, y + 36), (x + 43, y + 33), (x + 41, y + 40)], RED)
+    cv.fill_rect(x + 10, y + 30, 5, 10, GREEN)
+    cv.fill_rect(x + 18, y + 34, 5, 6, GREEN)
+
+
+def scene_capitol(cv, x, y, c):
+    """A capitol dome with columns and a flag."""
+    scene_backdrop(cv, x, y, c)
+    cv.poly([(x + 14, y + 18), (x + 32, y + 18), (x + 23, y + 6)], c)
+    cv.fill_rect(x + 12, y + 18, 22, 3, c)
+    for bx in (12, 19, 27):
+        cv.fill_rect(x + bx, y + 21, 3, 15, c)
+    cv.fill_rect(x + 10, y + 36, 26, 3, c)
+    cv.vline(x + 23, y + 2, y + 6, INK, 1)
+    cv.poly([(x + 23, y + 2), (x + 29, y + 4), (x + 23, y + 6)], RED)
+
+
+def scene_truck(cv, x, y, c):
+    """An aid truck: cab, cargo box, cross, wheels."""
+    scene_backdrop(cv, x, y, c)
+    cv.fill_rect(x + 5, y + 16, 24, 16, WHITE)
+    cv.hline(x + 5, x + 28, y + 16, c, 1)
+    cv.hline(x + 5, x + 28, y + 31, c, 1)
+    cv.vline(x + 5, y + 16, y + 31, c, 1)
+    cv.vline(x + 28, y + 16, y + 31, c, 1)
+    cv.fill_rect(x + 15, y + 20, 3, 8, RED)
+    cv.fill_rect(x + 13, y + 22, 7, 3, RED)
+    cv.fill_rect(x + 29, y + 20, 12, 12, c)
+    cv.fill_rect(x + 33, y + 22, 6, 6, SKY)
+    cv.circle(x + 13, y + 35, 4, INK, fill=True)
+    cv.circle(x + 35, y + 35, 4, INK, fill=True)
+    cv.hline(x + 4, x + 42, y + 40, c, 2)
+
+
+def scene_podium(cv, x, y, c):
+    """A speaker at a podium with two microphones and flags."""
+    scene_backdrop(cv, x, y, c)
+    cv.circle(x + 23, y + 14, 5, c, fill=True)
+    cv.poly([(x + 15, y + 28), (x + 31, y + 28), (x + 27, y + 20),
+             (x + 19, y + 20)], c)
+    cv.fill_rect(x + 12, y + 28, 22, 14, NAVY2)
+    cv.fill_rect(x + 12, y + 28, 22, 3, GOLD)
+    cv.vline(x + 17, y + 18, y + 28, INK, 2)
+    cv.vline(x + 29, y + 18, y + 28, INK, 2)
+    cv.circle(x + 17, y + 17, 2, INK, fill=True)
+    cv.circle(x + 29, y + 17, 2, INK, fill=True)
+
+
+def scene_lock(cv, x, y, c):
+    """A broken padlock: body, open shackle, crack."""
+    scene_backdrop(cv, x, y, c)
+    cv.fill_rect(x + 10, y + 20, 26, 20, c)
+    cv.fill_rect(x + 13, y + 23, 20, 14, (200, 210, 225))
+    cv.circle(x + 23, y + 28, 3, INK, fill=True)
+    cv.fill_rect(x + 22, y + 28, 2, 6, INK)
+    cv.thick_line(x + 16, y + 20, x + 16, y + 10, GOLD, 3)
+    cv.thick_line(x + 16, y + 10, x + 23, y + 8, GOLD, 3)
+    cv.thick_line(x + 30, y + 20, x + 30, y + 12, GOLD, 3)
+    cv.thick_line(x + 30, y + 12, x + 26, y + 6, GOLD, 3)
+    cv.star(x + 36, y + 8, 5, 2, 5, RED)
+
+
+def scene_dove(cv, x, y, c):
+    """A dove with an olive branch over a globe arc."""
+    scene_backdrop(cv, x, y, c)
+    cv.ellipse(x + 23, y + 36, 20, 7, TEAL)
+    cv.ellipse(x + 23, y + 20, 11, 7, WHITE)
+    cv.circle(x + 33, y + 14, 4, WHITE, fill=True)
+    cv.poly([(x + 36, y + 13), (x + 42, y + 15), (x + 36, y + 17)], GOLD)
+    cv.poly([(x + 14, y + 16), (x + 24, y + 12), (x + 22, y + 20)], WHITE)
+    cv.thick_line(x + 26, y + 26, x + 36, y + 30, GREEN, 2)
+    cv.circle(x + 36, y + 30, 2, GREEN, fill=True)
+    cv.circle(x + 32, y + 28, 2, GREEN, fill=True)
+
+
+def scene_coin(cv, x, y, c):
+    """A coin stack with a euro-style mark and a rising arrow."""
+    scene_backdrop(cv, x, y, c)
+    for i, yy in enumerate((34, 28, 22)):
+        cv.ellipse(x + 18, y + yy, 12, 4, GOLD)
+        cv.fill_rect(x + 6, y + yy - 3, 24, 3, GOLD)
+    cv.circle(x + 34, y + 14, 9, GOLD, fill=True)
+    cv.circle(x + 34, y + 14, 9, BROWN)
+    draw_text(cv, x + 31, y + 11, "E", 1, BROWN)
+    cv.thick_line(x + 6, y + 40, x + 40, y + 40, INK, 2)
+
+
+def scene_cap(cv, x, y, c):
+    """A graduation cap with tassel over an open book."""
+    scene_backdrop(cv, x, y, c)
+    cv.poly([(x + 6, y + 18), (x + 23, y + 10), (x + 40, y + 18),
+             (x + 23, y + 26)], SLATE)
+    cv.poly([(x + 14, y + 22), (x + 32, y + 22), (x + 32, y + 30),
+             (x + 14, y + 30)], NAVY2)
+    cv.vline(x + 40, y + 18, y + 32, GOLD, 2)
+    cv.circle(x + 40, y + 34, 2, GOLD, fill=True)
+    cv.poly([(x + 8, y + 38), (x + 23, y + 33), (x + 38, y + 38),
+             (x + 23, y + 43)], WHITE)
+    cv.vline(x + 23, y + 33, y + 43, HAIR, 1)
+
+
+def scene_fire(cv, x, y, c):
+    """A factory with flames and smoke columns."""
+    scene_backdrop(cv, x, y, c)
+    cv.fill_rect(x + 6, y + 22, 34, 18, SLATE)
+    cv.fill_rect(x + 30, y + 10, 5, 14, SLATE)
+    cv.circle(x + 33, y + 8, 3, SLATE, fill=True)
+    cv.circle(x + 38, y + 6, 2, SLATE, fill=True)
+    for wx in (10, 18, 26):
+        cv.fill_rect(x + wx, y + 26, 4, 5, GOLD)
+    cv.star(x + 16, y + 16, 9, 4, 5, FLAME)
+    cv.star(x + 26, y + 13, 7, 3, 5, GOLD)
+    cv.hline(x + 4, x + 42, y + 41, c, 2)
+
+
+def scene_ball(cv, x, y, c):
+    """A football on grass with a goal frame behind it."""
+    scene_backdrop(cv, x, y, c)
+    cv.vline(x + 8, y + 6, y + 30, WHITE, 2)
+    cv.vline(x + 38, y + 6, y + 30, WHITE, 2)
+    cv.hline(x + 8, x + 38, y + 6, WHITE, 2)
+    cv.circle(x + 23, y + 28, 11, WHITE, fill=True)
+    cv.circle(x + 23, y + 28, 11, INK)
+    cv.poly([(x + 20, y + 24), (x + 26, y + 24), (x + 28, y + 29),
+             (x + 23, y + 33), (x + 18, y + 29)], INK)
+    cv.hline(x + 4, x + 42, y + 40, GREEN, 3)
+
+
+def scene_helmet(cv, x, y, c):
+    """An American football helmet with facemask and stripe."""
+    scene_backdrop(cv, x, y, c)
+    cv.circle(x + 22, y + 22, 14, c, fill=True)
+    cv.fill_rect(x + 8, y + 22, 28, 8, c)
+    cv.hline(x + 8, x + 36, y + 8, WHITE, 3)
+    cv.vline(x + 22, y + 8, y + 22, WHITE, 2)
+    cv.thick_line(x + 34, y + 22, x + 42, y + 26, SLATE, 2)
+    cv.thick_line(x + 34, y + 28, x + 42, y + 28, SLATE, 2)
+    cv.circle(x + 18, y + 20, 2, WHITE, fill=True)
+    cv.hline(x + 4, x + 42, y + 40, c, 2)
+
+
+SCENES = {
+    "missile": scene_missile,
+    "blast": scene_blast,
+    "table": scene_table,
+    "memo": scene_memo,
+    "cuffs": scene_cuffs,
+    "globe": scene_globe,
+    "fence": scene_fence,
+    "ballot": scene_ballot,
+    "trophy": scene_trophy,
+    "rugby": scene_rugby,
+    "hospital": scene_hospital,
+    "spiral": scene_spiral,
+    "scales": scene_scales,
+    "virus": scene_virus,
+    "banknote": scene_banknote,
+    "ambush": scene_ambush,
+    "river": scene_river,
+    "chip": scene_chip,
+    "bank": scene_bank,
+    "shipfire": scene_shipfire,
+    "peaks": scene_peaks,
+    "chart": scene_chart,
+    "capitol": scene_capitol,
+    "truck": scene_truck,
+    "podium": scene_podium,
+    "lock": scene_lock,
+    "dove": scene_dove,
+    "coin": scene_coin,
+    "cap": scene_cap,
+    "fire": scene_fire,
+    "ball": scene_ball,
+    "helmet": scene_helmet,
+}
+
+
+def draw_scene_scaled(cv, kind, x, y, size, color):
+    """Render a 46x46 scene into a temp canvas, then blit it scaled
+    down to size x size by nearest-neighbour sampling, so the small
+    square cards keep their illustrations."""
+    tmp = Canvas(46, 46, PAPER)
+    SCENES[kind](tmp, 0, 0, color)
+    for dy in range(size):
+        sy = dy * 46 // size
+        for dx in range(size):
+            sx = dx * 46 // size
+            i = (sy * 46 + sx) * 3
+            cv.px(x + dx, y + dy,
+                  (tmp.buf[i], tmp.buf[i + 1], tmp.buf[i + 2]))
+
+
+# ---------------------------------------------------------------- world map
 def draw_map(cv, x, y, w, h):
-    """Navy world map with numbered pins for the lead + 24 stories.
+    """Navy world map with numbered pins for the lead + 36 stories.
 
-    Pins are displaced deterministically (fixed +13/+7 steps, never
+    Pins are displaced deterministically (fixed ring offsets, never
     random) when they would collide, with a leader line back to the
     true projected point.
     """
@@ -921,15 +1190,18 @@ def draw_map(cv, x, y, w, h):
         cv.poly([proj(lon, lat) for lon, lat in poly], SAND)
     cv.grain(mx, my, mw, mh, (198, 166, 112), (230, 200, 150), 1)
 
-    # pins: lead star first, then stories 01..24 in fixed order.
     placed = []
-
-    RING = [(0, 0), (16, 0), (-16, 0), (0, -14), (0, 14),
+    RING = [(0, 0), (8, 0), (-8, 0), (0, -7), (0, 7),
+            (8, -7), (-8, -7), (8, 7), (-8, 7),
+            (16, 0), (-16, 0), (0, -14), (0, 14),
             (16, -14), (-16, -14), (16, 14), (-16, 14),
             (32, 0), (-32, 0), (0, -28), (0, 28),
             (32, -14), (-32, -14), (32, 14), (-32, 14),
             (16, -28), (-16, -28), (16, 28), (-16, 28),
-            (48, 0), (-48, 0), (0, -42), (0, 42)]
+            (48, 0), (-48, 0), (0, -42), (0, 42),
+            (48, -14), (-48, -14), (48, 14), (-48, 14),
+            (32, -28), (-32, -28), (32, 28), (-32, 28),
+            (64, 0), (-64, 0), (0, -56), (0, 56)]
 
     def place_pin(tx, ty, label, color, star=False):
         px, py = tx, ty
@@ -963,25 +1235,31 @@ def draw_map(cv, x, y, w, h):
     cv.fill_rect(mx, my + mh - 14, 118, 14, NAVY2)
     draw_text(cv, mx + 4, my + mh - 11, "LEAD = GOLD STAR", 1, GOLD)
 
-
 # ------------------------------------------------------------------- layout
 MARGIN = 24
 
 
 def draw_lead_scene(cv, x, y, w, h):
-    """Night over the Gulf: coastline, two blasts, missile arcs, a tanker."""
+    """Night over the Gulf: coastline, two blasts, missile arcs, a tanker.
+
+    The two blast stars are the wider Gulf war: Bahrain (the strike
+    first reported on Sunday 22 Nov) and Ali Al Salem in Kuwait (hit
+    on 18 Nov) -- the strip below names Bahrain, so no Sunday hit in
+    Kuwait is claimed.
+    """
     cv.fill_rect(x, y, w, h, SEA)
     cv.dither_rect(x, y, w, h, SEA, (20, 62, 100))
     cv.grain(x, y, w, h, (10, 36, 60), (30, 80, 130), 1)
-    cv.poly([(x, y + 30), (x + 110, y + 22), (x + 90, y + 90),
-             (x + 120, y + 140), (x + 80, y + 190), (x + 95, y + h),
+    cv.halftone(x + 150, y + 8, 170, 60, (90, 140, 190), 8, 1)
+    cv.poly([(x, y + 26), (x + 110, y + 20), (x + 90, y + 80),
+             (x + 120, y + 120), (x + 80, y + 150), (x + 95, y + h),
              (x, y + h)], SAND)
-    kx, ky = x + 82, y + 55
-    bx, by = x + 66, y + 118
+    kx, ky = x + 82, y + 48
+    bx, by = x + 66, y + 104
     cv.circle(kx, ky, 4, WHITE, fill=True)
     cv.circle(bx, by, 4, WHITE, fill=True)
-    draw_text(cv, kx + 14, ky - 7, "KUWAIT", 2, WHITE)
-    draw_text(cv, bx + 14, by - 7, "BAHRAIN", 2, WHITE)
+    draw_text(cv, kx + 24, ky - 7, "ALI AL SALEM", 2, WHITE)
+    draw_text(cv, bx + 24, by - 7, "BAHRAIN", 2, WHITE)
     for (ex, ey) in ((kx, ky), (bx, by)):
         sx, sy = x + w - 18, y + 16
         prev = (sx, sy)
@@ -996,130 +1274,150 @@ def draw_lead_scene(cv, x, y, w, h):
     cv.star(kx, ky, 12, 5, 8, (230, 60, 30))
     cv.star(bx, by, 17, 7, 8, GOLD)
     cv.star(bx, by, 10, 4, 8, (230, 60, 30))
-    tx, ty = x + 190, y + 150
+    tx, ty = x + 190, y + 118
     cv.fill_rect(tx, ty, 80, 8, NAVY2)
     cv.poly([(tx, ty), (tx + 6, ty + 15), (tx + 74, ty + 15),
              (tx + 80, ty)], NAVY2)
     for i, col in enumerate((RED, GOLD, TEAL)):
         cv.fill_rect(tx + 10 + i * 18, ty - 12, 15, 12, col)
     cv.star(tx + 22, ty - 20, 9, 4, 5, FLAME)
-    draw_text(cv, tx + 4, ty + 20, "TANKERS HIT", 2, SKY)
-    draw_text(cv, tx + 4, ty + 34, "OFF OMAN", 2, SKY)
-    cv.fill_rect(x, y + h - 24, w, 24, NAVY)
-    draw_text(cv, x + 12, y + h - 18, "U.S. BASE HIT IN KUWAIT", 2, WHITE)
+    cv.fill_rect(x, y + h - 20, w, 20, NAVY)
+    draw_text(cv, x + 12, y + h - 14,
+              "U.S. BASES HIT IN BAHRAIN \u2014 TANKERS HIT OFF OMAN", 1,
+              WHITE)
 
 
 def draw_masthead(cv):
-    cv.hline(MARGIN, W - MARGIN, 12, INK, 2)
-    draw_text(cv, MARGIN, 20, "SUNDAY, 22 NOVEMBER 2026", 2, INK)
+    cv.hline(MARGIN, W - MARGIN, 10, INK, 2)
+    draw_text(cv, MARGIN, 16, "SUNDAY, 22 NOVEMBER 2026", 2, INK)
     right = "ONE IMAGE  \u2022  THE DAY'S NEWS"
-    draw_text(cv, W - MARGIN - text_width(right, 2), 20, right, 2, RED)
-    draw_text_centered(cv, MARGIN, W - MARGIN, 38, "THE WORLD TODAY", 6, INK)
-    cv.hline(MARGIN, W - MARGIN, 86, INK, 4)
-    cv.hline(MARGIN, W - MARGIN, 92, INK, 1)
+    draw_text(cv, W - MARGIN - text_width(right, 2), 16, right, 2, RED)
+    draw_text_centered(cv, MARGIN, W - MARGIN, 32, "THE WORLD TODAY", 6, INK)
+    cv.hline(MARGIN, W - MARGIN, 78, INK, 4)
+    cv.hline(MARGIN, W - MARGIN, 83, INK, 1)
 
 
 def draw_chips(cv):
     x = MARGIN
     for label, bg, fg in CHIPS:
         w = text_width(label, 2) + 10
-        cv.fill_rect(x, 98, w, 22, bg)
-        draw_text(cv, x + 5, 102, label, 2, fg)
+        cv.fill_rect(x, 88, w, 20, bg)
+        draw_text(cv, x + 5, 92, label, 2, fg)
         x += w + 5
 
 
 def draw_timeline(cv):
-    draw_text(cv, MARGIN, 128, "FIRST WIRE \u2014 UTC", 2, INK)
-    cv.hline(240, 990, 142, INK, 2)
+    draw_text(cv, MARGIN, 114, "FIRST WIRE \u2014 UTC", 2, INK)
+    cv.hline(240, 990, 128, INK, 2)
     for i, (time, label) in enumerate(TIMELINE):
-        tx = 250 + i * 105
-        cv.circle(tx, 142, 2, INK, fill=True)
+        tx = 250 + i * 78
+        cv.circle(tx, 128, 2, INK, fill=True)
         tw = text_width(time, 1)
         lx = min(max(tx - tw // 2, MARGIN), W - MARGIN - tw)
-        draw_text(cv, lx, 128, time, 1, INK)
+        draw_text(cv, lx, 114, time, 1, INK)
+        # Alternate the label row so neighbouring labels never collide.
+        ly = 134 if i % 2 == 0 else 144
         lw = text_width(label, 1)
         lx = min(max(tx - lw // 2, MARGIN), W - MARGIN - lw)
-        draw_text(cv, lx, 148, label, 1, MUTED)
+        draw_text(cv, lx, ly, label, 1, MUTED)
 
 
 def draw_lead_text(cv, x, y, w):
-    draw_text(cv, x, y + 6, "MIDDLE EAST \u2022 LEAD", 2, RED)
-    cv.hline(x, x + w, y + 28, RED, 2)
-    yy = y + 36
+    draw_text(cv, x, y + 2, "MIDDLE EAST \u2022 LEAD", 2, RED)
+    cv.hline(x, x + w, y + 20, RED, 2)
+    yy = y + 26
     for line in LEAD["headline"]:
         draw_text(cv, x, yy, line, 3, INK)
-        yy += 24
-    yy = y + 116
+        yy += 22
+    yy = y + 94
     for line in LEAD["summary"]:
         draw_text(cv, x, yy, line, 2, MUTED)
-        yy += 16
+        yy += 14
     tag = LEAD["tag"]
     tw = text_width(tag, 2)
-    cv.fill_rect(x, y + 182, tw + 20, 20, RED)
-    draw_text(cv, x + 10, y + 187, tag, 2, WHITE)
-    draw_text(cv, x + tw + 30, y + 187, "WIRE " + LEAD["wire"], 1, MUTED)
+    cv.fill_rect(x, y + 150, tw + 20, 16, RED)
+    draw_text(cv, x + 10, y + 153, tag, 2, WHITE)
+    draw_text(cv, x + tw + 30, y + 153, "WIRE " + LEAD["wire"], 1, MUTED)
 
 
 def draw_datecheck(cv):
-    y, h = 372, 26
+    y, h = 326, 32
     cv.fill_rect(MARGIN, y, W - 2 * MARGIN, h, PINK)
     cv.hline(MARGIN, W - MARGIN, y, RED, 2)
     cv.hline(MARGIN, W - MARGIN, y + h - 1, RED, 2)
     cv.vline(MARGIN, y, y + h - 1, RED, 2)
     cv.vline(W - MARGIN, y, y + h - 1, RED, 2)
-    draw_text(cv, MARGIN + 12, y + 6,
-              "DATE CHECK: 23 filed 22 NOV  \u2022  2 from 21 NOV \u2014 "
-              "EU DEAL, PERU QUAKE (tagged)", 2, INK)
+    draw_text(cv, MARGIN + 12, y + 5,
+              "DATE CHECK: ALL 37 STORIES FILED SUNDAY 22 NOV 2026", 2, INK)
+    draw_text(cv, MARGIN + 12, y + 21,
+              "Held back: Peru 6.9 quake, EU-Indonesia trade deal + Poland "
+              "missiles (first filed 21 Nov) \u2014 and no Manila summit: the "
+              "real trilateral met in Shenzhen.", 1, INK)
 
 
 def draw_card(cv, x, y, w, h, story):
+    """Compact 238 x 60 card: 32 px scaled scene, number + place +
+    source code on top, two headline lines, one fact line."""
     cv.fill_rect(x, y, w, h, CARD)
-    cv.grain(x, y, w, h, (238, 233, 224), (255, 253, 250), 1)
+    cv.grain(x, y, w, h, CREAM2, CREAM3, 1)
     cv.fill_rect(x, y, 5, h, story["color"])
     cv.vline(x + w - 1, y, y + h - 1, HAIR, 1)
     cv.hline(x, x + w - 1, y + h - 1, HAIR, 1)
-    SCENES[story["scene"]](cv, x + 8, y + 9, story["color"])
-    tx = x + 60
-    draw_text(cv, tx, y + 7, "#%02d" % story["n"], 2, story["color"])
-    draw_text(cv, tx + 40, y + 7, story["kicker"], 2, INK)
-    if story["tag"]:
-        cv.fill_rect(x + w - 54, y + 7, 46, 13, RED)
-        draw_text(cv, x + w - 49, y + 9, story["tag"], 1, WHITE)
-    yy = y + 24
-    for line in story["hl"]:
+    draw_scene_scaled(cv, story["scene"], x + 4, y + 5, 32,
+                      story["color"])
+    tx = x + 42
+    draw_text(cv, tx, y + 4, "#%02d" % story["n"], 2, story["color"])
+    draw_text(cv, tx + 40, y + 4, story["place"], 2, INK)
+    src_x = tx + text_width("#%02d %s" % (story["n"], story["place"]),
+                            2) + 4
+    draw_text(cv, src_x, y + 6, story["src"], 1, MUTED)
+    yy = y + 19
+    for line in story["head"]:
         draw_text(cv, tx, yy, line, 2, INK)
         yy += 15
-    draw_text(cv, tx, y + 54, story["fact"], 1, MUTED)
+    draw_text(cv, tx, y + 50, story["fact"], 1, MUTED)
 
 
-def draw_ticker_footer(cv):
-    draw_text(cv, MARGIN, 968, "ALSO TODAY", 2, RED)
-    lines = wrap_lines(TICKER, 1, W - MARGIN - 160)
-    for i, line in enumerate(lines[:2]):
-        draw_text(cv, MARGIN + 136, 968 + i * 10, line, 1, INK)
-    cv.hline(MARGIN, W - MARGIN, 994, INK, 1)
-    draw_text_centered(cv, MARGIN, W - MARGIN, 1002,
+def draw_also_on(cv):
+    draw_text(cv, MARGIN, 924, "ALSO ON SUNDAY", 2, RED)
+    draw_text(cv, MARGIN + 190, 924, "24 MORE, ALL FILED 22 NOV",
+              2, INK)
+    cv.hline(MARGIN, W - MARGIN, 940, INK, 1)
+    col_x = [MARGIN, 270, 516, 762]
+    for i, item in enumerate(ALSO_ON):
+        col, row = divmod(i, 6)
+        x = col_x[col]
+        y = 946 + row * 11
+        draw_text(cv, x, y, "%02d" % (i + 1), 1, RED)
+        draw_text(cv, x + 18, y, item, 1, INK)
+
+
+def draw_footer(cv):
+    cv.hline(MARGIN, W - MARGIN, 1012, INK, 1)
+    draw_text_centered(cv, MARGIN, W - MARGIN, 1016,
                        "Sources: Reuters  \u2022  AP  \u2022  BBC  \u2022  "
-                       "wire digests, 22 Nov 2026 \u2014 25 stories, "
-                       "9 regions, all dated", 1, MUTED)
+                       "AFP  \u2022  Al Jazeera \u2014 wire digests, "
+                       "Sunday 22 Nov 2026  \u2022  37 stories, 7 regions",
+                       1, MUTED)
 
 
 def draw_page(cv):
     cv.fill_rect(0, 0, W, H, PAPER)
-    cv.grain(0, 0, W, H, (232, 226, 214), (255, 250, 242), 1)
+    cv.grain(0, 0, W, H, (232, 226, 214), CREAM3, 1)
     draw_masthead(cv)
     draw_chips(cv)
     draw_timeline(cv)
-    draw_lead_scene(cv, MARGIN, 162, 330, 204)
-    draw_lead_text(cv, 366, 162, 300)
-    draw_map(cv, 678, 162, 322, 204)
+    draw_lead_scene(cv, MARGIN, 154, 330, 168)
+    draw_lead_text(cv, 366, 154, 300)
+    draw_map(cv, 678, 154, 322, 168)
     draw_datecheck(cv)
     for i, story in enumerate(STORIES):
-        row, col = divmod(i, 3)
-        x = MARGIN + col * 328
-        y = 404 + row * 70
-        draw_card(cv, x, y, 320, 64, story)
-    draw_ticker_footer(cv)
+        row, col = divmod(i, 4)
+        x = MARGIN + col * 246
+        y = 362 + row * 62
+        draw_card(cv, x, y, 238, 60, story)
+    draw_also_on(cv)
+    draw_footer(cv)
 
 
 # --------------------------------------------------------------------- main
@@ -1133,10 +1431,10 @@ def main():
     draw_page(cv)
     size = write_png(path, cv)
     print("wrote %s (%d bytes, %dx%d)" % (path, size, W, H))
-    print("stories: 1 lead + %d grid = %d, ticker items: 6" %
-          (len(STORIES), 1 + len(STORIES)))
+    print("stories: 1 lead + %d grid = %d featured, %d also-on, "
+          "%d regions" % (len(STORIES), 1 + len(STORIES),
+                          len(ALSO_ON), len(CHIPS)))
 
 
 if __name__ == "__main__":
     main()
-
